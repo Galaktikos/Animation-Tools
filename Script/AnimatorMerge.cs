@@ -21,6 +21,7 @@ namespace Galaktikos.AnimationHelper
 			foreach (AnimatorData animator in Animators)
 			{
 				foreach (AnimatorControllerLayer layer in animator.Animator.layers)
+				{
 					layers.Add(new AnimatorControllerLayer()
 					{
 						name = animator.Prefix + layer.name,
@@ -28,14 +29,15 @@ namespace Galaktikos.AnimationHelper
 						blendingMode = layer.blendingMode,
 						defaultWeight = layer.defaultWeight,
 						iKPass = layer.iKPass,
-						stateMachine = layer.stateMachine,
+						stateMachine = String.IsNullOrEmpty(animator.Prefix) ? layer.stateMachine : FixStateMachineRecursive(layer.stateMachine, animator.Prefix),
 						syncedLayerAffectsTiming = layer.syncedLayerAffectsTiming,
 						syncedLayerIndex = layer.syncedLayerIndex
 					});
+				}
 
 				foreach (AnimatorControllerParameter parameter in animator.Animator.parameters)
 				{
-					string name = parameter.name[0] == '.' ? parameter.name.Remove(0, 1) : animator.Prefix + parameter.name;
+					string name = PrefixParameter(parameter.name, animator.Prefix);
 
 					bool parameterFound = false;
 					foreach (AnimatorControllerParameter existingParameter in parameters)
@@ -78,6 +80,88 @@ namespace Galaktikos.AnimationHelper
 			AssetDatabase.SaveAssets();
 			AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(CurrentMergedAnimator));
 			AssetDatabase.Refresh();
+		}
+
+		private static AnimatorStateMachine FixStateMachineRecursive(AnimatorStateMachine stateMachine, string prefix)
+		{
+			AnimatorStateMachine newStateMachine = Instantiate(stateMachine);
+
+			if (newStateMachine == null)
+				return stateMachine;
+
+			newStateMachine.entryTransitions = FixTransitions(newStateMachine.entryTransitions, prefix);
+			newStateMachine.anyStateTransitions = FixTransitions(newStateMachine.anyStateTransitions, prefix);
+
+			foreach (ChildAnimatorState childState in newStateMachine.states)
+			{
+				AnimatorState state = childState.state;
+
+				state.cycleOffsetParameter = PrefixParameter(state.cycleOffsetParameter, prefix);
+				state.mirrorParameter = PrefixParameter(state.mirrorParameter, prefix);
+				state.speedParameter = PrefixParameter(state.speedParameter, prefix);
+				state.timeParameter = PrefixParameter(state.timeParameter, prefix);
+
+				state.transitions = FixTransitions(state.transitions, prefix);
+			}
+
+			foreach (ChildAnimatorStateMachine child in newStateMachine.stateMachines)
+				FixStateMachineRecursive(child.stateMachine, prefix);
+
+			return newStateMachine;
+		}
+
+		private static AnimatorTransition[] FixTransitions(AnimatorTransition[] transitions, string prefix)
+		{
+			List<AnimatorTransition> newTransitions = new List<AnimatorTransition>();
+			foreach (AnimatorTransition transition in transitions)
+			{
+				AnimatorTransition newTransition = Instantiate(transition);
+				List<AnimatorCondition> conditions = new List<AnimatorCondition>();
+
+				foreach (AnimatorCondition condition in newTransition.conditions)
+					conditions.Add(new AnimatorCondition()
+					{
+						mode = condition.mode,
+						parameter = PrefixParameter(condition.parameter, prefix),
+						threshold = condition.threshold
+					});
+
+				newTransition.conditions = conditions.ToArray();
+				newTransitions.Add(newTransition);
+			}
+
+			return newTransitions.ToArray();
+		}
+
+		private static AnimatorStateTransition[] FixTransitions(AnimatorStateTransition[] transitions, string prefix)
+		{
+			List<AnimatorStateTransition> newTransitions = new List<AnimatorStateTransition>();
+			foreach (AnimatorStateTransition transition in transitions)
+			{
+				AnimatorStateTransition newTransition = Instantiate(transition);
+				List<AnimatorCondition> conditions = new List<AnimatorCondition>();
+
+				foreach (AnimatorCondition condition in newTransition.conditions)
+					conditions.Add(new AnimatorCondition()
+					{
+						mode = condition.mode,
+						parameter = PrefixParameter(condition.parameter, prefix),
+						threshold = condition.threshold
+					});
+
+				newTransition.conditions = conditions.ToArray();
+				newTransitions.Add(newTransition);
+			}
+
+			return newTransitions.ToArray();
+		}
+
+		private static string PrefixParameter(string parameter, string prefix)
+		{
+			if (string.IsNullOrEmpty(parameter))
+				return parameter;
+
+			return parameter[0] == '.' ? parameter.Remove(0, 1) : prefix + parameter;
 		}
 
 		[Serializable]
