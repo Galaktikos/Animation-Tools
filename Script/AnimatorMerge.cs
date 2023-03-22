@@ -61,12 +61,21 @@ namespace Galaktikos.AnimationHelper
 
 			if (CurrentMergedAnimator != null)
 			{
+				Debug.Log("Overwriting animator.");
 				CurrentMergedAnimator = AssetDatabase.LoadAssetAtPath<AnimatorController>(AssetDatabase.GetAssetPath(this));
 				CurrentMergedAnimator.layers = layers.ToArray();
 				CurrentMergedAnimator.parameters = parameters.ToArray();
+				if (CurrentMergedAnimator.name != Name){
+					CurrentMergedAnimator.name = Name;
+				}
 			}
 			else
 			{
+				Debug.Log("Creating Animator.");
+				if(Name == ""){
+					string[] assetsName =AssetDatabase.GetAssetPath(this).Split('/');
+					Name = assetsName[assetsName.Length-1];
+				}
 				CurrentMergedAnimator = new AnimatorController()
 				{
 					name = Name,
